@@ -42,7 +42,14 @@ let cachedEnv: AppEnv | null = null;
 
 export function getEnv(): AppEnv {
   if (!cachedEnv) {
-    cachedEnv = envSchema.parse(process.env);
+    const cleaned: Record<string, string | undefined> = {};
+    for (const [k, v] of Object.entries(process.env)) {
+      cleaned[k] = v === "" ? undefined : v;
+    }
+    if (!cleaned.DATABASE_URL && cleaned.POSTGRES_URL) {
+      cleaned.DATABASE_URL = cleaned.POSTGRES_URL;
+    }
+    cachedEnv = envSchema.parse(cleaned);
   }
   return cachedEnv;
 }

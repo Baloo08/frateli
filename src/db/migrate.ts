@@ -7,8 +7,35 @@ import { hashPassword } from "../lib/crypto";
 const MIGRATION_LOCK_ID = 74839201;
 
 export async function runMigrations(): Promise<void> {
+  const env = getEnv();
+  if (!process.env.DATABASE_URL && !process.env.POSTGRES_URL) {
+    console.warn(
+      "[migrate] WARNING: DATABASE_URL is not set in environment variables; falling back to default localhost."
+    );
+  } else {
+    try {
+      const parsedUrl = new URL(env.DATABASE_URL);
+      console.log(
+        `[migrate] Connecting to PostgreSQL at ${parsedUrl.hostname}:${parsedUrl.port || "5432"}${parsedUrl.pathname}`
+      );
+    } catch {
+      console.log("[migrate] Connecting to PostgreSQL using configured DATABASE_URL");
+    }
+  }
+
   const pool = getPool();
-  const client = await pool.connect();
+  let client;
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    try {
+      client = await pool.connect();
+      break;
+    } catch (err) {
+      if (attempt === 5) throw err;
+      console.warn(`[migrate] PostgreSQL connection attempt ${attempt}/5 failed, retrying in 2s...`);
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+  }
+  if (!client) throw new Error("Failed to acquire PostgreSQL client");
 
   try {
     await client.query("SELECT pg_advisory_lock($1)", [MIGRATION_LOCK_ID]);
@@ -47,7 +74,6 @@ export async function runMigrations(): Promise<void> {
     }
 
     // Bootstrap initial superadmin if configured and none exists yet
-    const env = getEnv();
     if (env.BOOTSTRAP_ADMIN_EMAIL && env.BOOTSTRAP_ADMIN_PASSWORD) {
       const superadminCount = await client.query<{ count: string }>(
         "SELECT count(*)::text AS count FROM users WHERE role = 'superadmin'"
