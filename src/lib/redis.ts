@@ -8,22 +8,28 @@ const globalForRedis = globalThis as unknown as {
 
 export function getQueueRedis(): Redis {
   if (!globalForRedis.__frateliQueueRedis) {
-    globalForRedis.__frateliQueueRedis = new Redis(getRedisQueueUrl(), {
+    const client = new Redis(getRedisQueueUrl(), {
       maxRetriesPerRequest: null,
       enableReadyCheck: true,
       lazyConnect: true,
+      connectTimeout: 5000,
     });
+    client.on("error", (err) => console.warn("[redis-queue]", err.message));
+    globalForRedis.__frateliQueueRedis = client;
   }
   return globalForRedis.__frateliQueueRedis;
 }
 
 export function getCacheRedis(): Redis {
   if (!globalForRedis.__frateliCacheRedis) {
-    globalForRedis.__frateliCacheRedis = new Redis(getRedisCacheUrl(), {
+    const client = new Redis(getRedisCacheUrl(), {
       maxRetriesPerRequest: 2,
       enableReadyCheck: true,
       lazyConnect: true,
+      connectTimeout: 3000,
     });
+    client.on("error", (err) => console.warn("[redis-cache]", err.message));
+    globalForRedis.__frateliCacheRedis = client;
   }
   return globalForRedis.__frateliCacheRedis;
 }

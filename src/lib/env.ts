@@ -49,6 +49,9 @@ export function getEnv(): AppEnv {
     if (!cleaned.DATABASE_URL && cleaned.POSTGRES_URL) {
       cleaned.DATABASE_URL = cleaned.POSTGRES_URL;
     }
+    if (cleaned.NEXT_PUBLIC_APP_URL) {
+      cleaned.NEXT_PUBLIC_APP_URL = cleaned.NEXT_PUBLIC_APP_URL.replace(/\/+$/, "");
+    }
     cachedEnv = envSchema.parse(cleaned);
   }
   return cachedEnv;
