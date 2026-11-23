@@ -43,7 +43,16 @@ export async function POST(
       lessonId,
       assetRes.rows[0].id,
     ]);
-    return NextResponse.json({ ok: true, kind: "video", videoAssetId: assetRes.rows[0].id }, { status: 201 });
+    return NextResponse.json(
+      {
+        ok: true,
+        kind: "video",
+        videoAssetId: assetRes.rows[0].id,
+        lessonId,
+        aiSuggestionsAvailable: true,
+      },
+      { status: 201 }
+    );
   }
 
   const key = `resources/uploads/${courseId}/${Date.now()}-${safeName}`;

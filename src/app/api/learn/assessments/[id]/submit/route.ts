@@ -26,9 +26,10 @@ export async function POST(
   const assRes = await query<{
     id: string;
     course_id: string;
+    assessment_type: "graded" | "practice";
     passing_score_pct: string;
     max_attempts: number;
-  }>(`SELECT id, course_id, passing_score_pct::text, max_attempts FROM assessments WHERE id = $1`, [
+  }>(`SELECT id, course_id, assessment_type, passing_score_pct::text, max_attempts FROM assessments WHERE id = $1`, [
     assessmentId,
   ]);
   const assessment = assRes.rows[0];
@@ -46,7 +47,7 @@ export async function POST(
     [assessmentId, user.id]
   );
   const attemptNo = Number(attemptsRes.rows[0]?.count ?? "0") + 1;
-  if (attemptNo > assessment.max_attempts) {
+  if (assessment.assessment_type === "graded" && attemptNo > assessment.max_attempts) {
     return NextResponse.json({ error: "Maximum attempts reached" }, { status: 400 });
   }
 
@@ -54,9 +55,11 @@ export async function POST(
     id: string;
     question_type: string;
     correct_answer_json: unknown;
+    explanation_es: string | null;
+    explanation_en: string | null;
     points: string;
   }>(
-    `SELECT id, question_type, correct_answer_json, points::text
+    `SELECT id, question_type, correct_answer_json, explanation_es, explanation_en, points::text
      FROM assessment_questions WHERE assessment_id = $1 ORDER BY sort_order ASC`,
     [assessmentId]
   );
@@ -64,6 +67,7 @@ export async function POST(
   let totalPoints = 0;
   let earnedAuto = 0;
   let hasShortAnswer = false;
+  const itemFeedback: Record<string, { correct: boolean; explanationEs: string | null; explanationEn: string | null }> = {};
 
   for (const q of qRes.rows) {
     const pts = Number(q.points);
@@ -75,9 +79,17 @@ export async function POST(
       continue;
     }
 
-    if (JSON.stringify(given) === JSON.stringify(q.correct_answer_json) || String(given) === String(q.correct_answer_json)) {
+    const isCorrect =
+      JSON.stringify(given) === JSON.stringify(q.correct_answer_json) ||
+      String(given) === String(q.correct_answer_json);
+    if (isCorrect) {
       earnedAuto += pts;
     }
+    itemFeedback[q.id] = {
+      correct: isCorrect,
+      explanationEs: q.explanation_es,
+      explanationEn: q.explanation_en,
+    };
   }
 
   const autoScorePct = totalPoints > 0 ? Number(((earnedAuto / totalPoints) * 100).toFixed(2)) : 100;
@@ -91,7 +103,7 @@ export async function POST(
     [assessmentId, user.id, attemptNo, JSON.stringify(parsed.data.answers), earnedAuto, finalPct, passed]
   );
 
-  if (finalPct !== null) {
+  if (assessment.assessment_type === "graded" && finalPct !== null) {
     await query(
       `UPDATE enrollments
        SET final_grade_pct = GREATEST(COALESCE(final_grade_pct, 0), $2)
@@ -109,16 +121,18 @@ export async function POST(
     action: "assessment.submitted",
     resourceType: "assessment_submission",
     resourceId: subRes.rows[0].id,
-    metadata: { attemptNo, autoScore: earnedAuto, finalPct, passed },
+    metadata: { assessmentType: assessment.assessment_type, attemptNo, autoScore: earnedAuto, finalPct, passed },
   });
 
   return NextResponse.json({
     ok: true,
+    assessmentType: assessment.assessment_type,
     submissionId: subRes.rows[0].id,
     attemptNo,
     finalScorePct: finalPct,
     passed,
     pendingManualReview: hasShortAnswer,
+    itemFeedback: assessment.assessment_type === "practice" ? itemFeedback : undefined,
     certificate: summary?.certificate ?? null,
   });
 }

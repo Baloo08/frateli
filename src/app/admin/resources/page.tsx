@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { getLocale } from "@/i18n";
 import { getActiveStorageDriver } from "@/lib/storage";
-import { isAiConfigured } from "@/lib/ai";
+import { getAiProviderStatus } from "@/lib/ai";
 import { getActiveGoogleIntegration, isGoogleOAuthConfigured } from "@/lib/google";
 import { getEnv } from "@/lib/env";
 import { AppShell } from "@/components/AppShell";
@@ -18,7 +18,10 @@ export default async function AdminResourcesPage({
   const user = await requireRole(["superadmin"]);
   const locale = await getLocale(user.preferredLocale);
   const params = await searchParams;
-  const integration = await getActiveGoogleIntegration().catch(() => null);
+  const [integration, aiStatus] = await Promise.all([
+    getActiveGoogleIntegration().catch(() => null),
+    getAiProviderStatus(),
+  ]);
   const env = getEnv();
 
   return (
@@ -30,8 +33,7 @@ export default async function AdminResourcesPage({
         <AdminResourcesClient
           locale={locale}
           storageDriver={getActiveStorageDriver()}
-          aiConfigured={isAiConfigured()}
-          aiModel={env.GEMINI_MODEL}
+          initialAiStatus={aiStatus}
           smtpConfigured={Boolean(env.SMTP_USER && env.SMTP_APP_PASSWORD)}
           smtpUser={env.SMTP_USER || null}
           googleOAuthConfigured={isGoogleOAuthConfigured()}

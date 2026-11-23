@@ -49,7 +49,7 @@ export default async function VideoStudioPage({
         }))}
         initialCourseId={sp.courseId || coursesRes.rows[0]?.id || ""}
         initialLessonId={sp.lessonId || ""}
-        aiConfigured={isAiConfigured()}
+        aiConfigured={await isAiConfigured()}
         locale={locale}
       />
     </AppShell>

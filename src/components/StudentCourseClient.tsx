@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { Locale } from "@/i18n";
+import { NapkinVisualDiagram, type VisualAidView } from "./NapkinVisualDiagram";
 
 export function StudentCourseClient({
   course,
@@ -31,6 +32,8 @@ export function StudentCourseClient({
     title: string;
     contentLocale: "es" | "en";
     htmlContent: string;
+    supportHtml: string;
+    visualAids: VisualAidView[];
     videoUrl: string | null;
     vttUrl: string | null;
     resources: { id: string; title: string; href: string; external: boolean }[];
@@ -38,6 +41,8 @@ export function StudentCourseClient({
   } | null;
   assessments: {
     id: string;
+    lesson_id: string | null;
+    assessment_type: "graded" | "practice";
     title_es: string;
     title_en: string;
     passing_score_pct: string;
@@ -55,6 +60,9 @@ export function StudentCourseClient({
   const router = useRouter();
   const isEs = locale === "es";
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
+  const [practiceFeedback, setPracticeFeedback] = useState<
+    Record<string, { correct: boolean; explanationEs: string | null; explanationEn: string | null }>
+  >({});
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -102,11 +110,18 @@ export function StudentCourseClient({
         setStatusMsg(data.error || "Error");
         return;
       }
+      if (data.itemFeedback) {
+        setPracticeFeedback((prev) => ({ ...prev, ...data.itemFeedback }));
+      }
       setStatusMsg(
         data.pendingManualReview
           ? isEs
             ? "Evaluación enviada para calificación docente."
             : "Assessment submitted for teacher grading."
+          : data.assessmentType === "practice"
+          ? isEs
+            ? `Práctica completada: ${data.finalScorePct}% de aciertos. Revisa las explicaciones abajo.`
+            : `Practice completed: ${data.finalScorePct}% score. Review explanations below.`
           : isEs
           ? `Nota obtenida: ${data.finalScorePct}% (${data.passed ? "Aprobado" : "No aprobado"})`
           : `Score: ${data.finalScorePct}% (${data.passed ? "Passed" : "Not passed"})`
@@ -116,6 +131,10 @@ export function StudentCourseClient({
       setBusy(false);
     }
   }
+
+  const visibleAssessments = assessments.filter(
+    (a) => !a.lesson_id || a.lesson_id === activeLesson?.id
+  );
 
   return (
     <div className="stack">
@@ -147,7 +166,6 @@ export function StudentCourseClient({
       </div>
 
       <div className="grid-2" style={{ gridTemplateColumns: "minmax(260px, 320px) 1fr", alignItems: "start" }}>
-        {/* Course Outline */}
         <aside className="card stack" aria-label={isEs ? "Temario del curso" : "Course syllabus"}>
           <h2>{isEs ? "Contenido" : "Syllabus"}</h2>
           {modules.map((m) => (
@@ -190,7 +208,6 @@ export function StudentCourseClient({
           )}
         </aside>
 
-        {/* Active Lesson & Assessments */}
         <div className="stack">
           {activeLesson ? (
             <article className="card stack" lang={activeLesson.contentLocale}>
@@ -220,6 +237,29 @@ export function StudentCourseClient({
                   className="prose"
                   dangerouslySetInnerHTML={{ __html: activeLesson.htmlContent }}
                 />
+              )}
+
+              {(activeLesson.supportHtml || activeLesson.visualAids.length > 0) && (
+                <section
+                  className="card stack"
+                  style={{ background: "var(--bg-muted)" }}
+                  aria-label={isEs ? "Material de apoyo visual" : "Visual study support"}
+                >
+                  <h3>{isEs ? "Guía de Apoyo y Esquemas Visuales" : "Study Guide & Visual Diagrams"}</h3>
+                  {activeLesson.supportHtml && (
+                    <div
+                      className="prose"
+                      dangerouslySetInnerHTML={{ __html: activeLesson.supportHtml }}
+                    />
+                  )}
+                  {activeLesson.visualAids.length > 0 && (
+                    <div className="stack">
+                      {activeLesson.visualAids.map((aid) => (
+                        <NapkinVisualDiagram key={aid.id} aid={aid} locale={locale} />
+                      ))}
+                    </div>
+                  )}
+                </section>
               )}
 
               {activeLesson.resources.length > 0 && (
@@ -260,14 +300,28 @@ export function StudentCourseClient({
             </div>
           )}
 
-          {assessments.map((ass) => (
+          {visibleAssessments.map((ass) => (
             <section key={ass.id} className="card stack">
-              <h2>{isEs ? ass.title_es : ass.title_en}</h2>
-              <p className="hint">
-                {isEs ? `Nota mínima para aprobar: ${ass.passing_score_pct}%` : `Passing score: ${ass.passing_score_pct}%`}
-              </p>
+              <div className="row" style={{ justifyContent: "space-between" }}>
+                <h2 style={{ margin: 0 }}>{isEs ? ass.title_es : ass.title_en}</h2>
+                <span className={`badge ${ass.assessment_type === "practice" ? "badge-success" : ""}`}>
+                  {ass.assessment_type === "practice"
+                    ? isEs
+                      ? "Práctica interactiva"
+                      : "Interactive Practice"
+                    : isEs
+                    ? "Evaluación calificada"
+                    : "Graded Assessment"}
+                </span>
+              </div>
+              {ass.assessment_type === "graded" && (
+                <p className="hint" style={{ margin: 0 }}>
+                  {isEs ? `Nota mínima para aprobar: ${ass.passing_score_pct}%` : `Passing score: ${ass.passing_score_pct}%`}
+                </p>
+              )}
               {ass.questions.map((q, qIdx) => {
                 const opts = (isEs ? q.options_json.es : q.options_json.en) || q.options_json.es || [];
+                const fb = practiceFeedback[q.id];
                 return (
                   <fieldset key={q.id} style={{ border: "1px solid var(--border-subtle)", borderRadius: "8px", padding: "12px" }}>
                     <legend style={{ fontWeight: 700 }}>
@@ -292,12 +346,26 @@ export function StudentCourseClient({
                         ))}
                       </div>
                     )}
+                    {fb && (
+                      <div className={`alert ${fb.correct ? "alert-success" : "alert-error"}`} style={{ marginTop: "10px" }}>
+                        <strong>{fb.correct ? (isEs ? "✓ Correcto" : "✓ Correct") : isEs ? "✗ Revisa este punto" : "✗ Review this item"}</strong>
+                        {(isEs ? fb.explanationEs : fb.explanationEn) && (
+                          <p style={{ margin: "4px 0 0" }}>{isEs ? fb.explanationEs : fb.explanationEn}</p>
+                        )}
+                      </div>
+                    )}
                   </fieldset>
                 );
               })}
               <div>
                 <button type="button" className="btn btn-primary" disabled={busy} onClick={() => submitQuiz(ass.id)}>
-                  {isEs ? "Enviar evaluación" : "Submit assessment"}
+                  {ass.assessment_type === "practice"
+                    ? isEs
+                      ? "Comprobar práctica"
+                      : "Check practice"
+                    : isEs
+                    ? "Enviar evaluación"
+                    : "Submit assessment"}
                 </button>
               </div>
             </section>

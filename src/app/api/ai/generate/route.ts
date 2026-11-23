@@ -4,9 +4,12 @@ import { getCurrentUser } from "@/lib/auth";
 import {
   generateLessonDraft,
   generateQuizDraft,
+  generateVideoPracticePack,
   generateVideoScript,
+  generateVideoSupportPack,
   isAiConfigured,
 } from "@/lib/ai";
+import { canManageCourse } from "@/lib/permissions";
 
 const aiRequestSchema = z.discriminatedUnion("mode", [
   z.object({
@@ -31,6 +34,22 @@ const aiRequestSchema = z.discriminatedUnion("mode", [
     durationMinutes: z.coerce.number().min(1).max(20).default(5),
     locale: z.enum(["es", "en"]).default("es"),
   }),
+  z.object({
+    mode: z.literal("video_support_pack"),
+    courseId: z.string().uuid(),
+    lessonId: z.string().uuid(),
+    topicHint: z.string().trim().max(500).optional(),
+    locale: z.enum(["es", "en"]).default("es"),
+    generateImages: z.boolean().default(true),
+  }),
+  z.object({
+    mode: z.literal("video_practice_pack"),
+    courseId: z.string().uuid(),
+    lessonId: z.string().uuid(),
+    topicHint: z.string().trim().max(500).optional(),
+    questionCount: z.coerce.number().int().min(3).max(12).default(5),
+    locale: z.enum(["es", "en"]).default("es"),
+  }),
 ]);
 
 export async function POST(req: NextRequest) {
@@ -39,9 +58,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  if (!isAiConfigured()) {
+  if (!(await isAiConfigured())) {
     return NextResponse.json(
-      { error: "GEMINI_API_KEY is not configured in environment variables" },
+      {
+        error:
+          "No hay clave de Gemini API configurada. El superadministrador debe agregarla en /admin/resources (BYOK).",
+      },
       { status: 503 }
     );
   }
@@ -54,6 +76,37 @@ export async function POST(req: NextRequest) {
 
   try {
     const d = parsed.data;
+
+    if (d.mode === "video_support_pack") {
+      if (!(await canManageCourse(user, d.courseId))) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      const pack = await generateVideoSupportPack({
+        userId: user.id,
+        courseId: d.courseId,
+        lessonId: d.lessonId,
+        topicHint: d.topicHint,
+        locale: d.locale,
+        generateImages: d.generateImages,
+      });
+      return NextResponse.json({ ok: true, mode: d.mode, pack });
+    }
+
+    if (d.mode === "video_practice_pack") {
+      if (!(await canManageCourse(user, d.courseId))) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      const pack = await generateVideoPracticePack({
+        userId: user.id,
+        courseId: d.courseId,
+        lessonId: d.lessonId,
+        topicHint: d.topicHint,
+        questionCount: d.questionCount,
+        locale: d.locale,
+      });
+      return NextResponse.json({ ok: true, mode: d.mode, pack });
+    }
+
     if (d.mode === "lesson") {
       const draft = await generateLessonDraft({
         userId: user.id,

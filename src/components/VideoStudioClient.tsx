@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { Locale } from "@/i18n";
@@ -45,6 +46,7 @@ export function VideoStudioClient({
   const [aiTopic, setAiTopic] = useState("");
   const [teleprompter, setTeleprompter] = useState("");
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [publishedTarget, setPublishedTarget] = useState<{ courseId: string; lessonId: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -267,6 +269,9 @@ export function VideoStudioClient({
         if (!completeRes.ok) throw new Error("Failed to save local video");
       }
 
+      if (courseId && lessonId) {
+        setPublishedTarget({ courseId, lessonId });
+      }
       setStatusMsg(
         isEs
           ? "Video guardado, encolado para optimización FFmpeg y publicado en la lección."
@@ -291,7 +296,23 @@ export function VideoStudioClient({
         </p>
         <div aria-live="polite" style={{ marginTop: "10px" }}>
           {errorMsg && <div className="alert alert-error" role="alert">{errorMsg}</div>}
-          {statusMsg && <div className="alert alert-success">{statusMsg}</div>}
+          {statusMsg && (
+            <div className="alert alert-success stack">
+              <span>{statusMsg}</span>
+              {publishedTarget && (
+                <div>
+                  <Link
+                    href={`/teach/courses/${publishedTarget.courseId}?suggestedLessonId=${publishedTarget.lessonId}`}
+                    className="btn btn-primary"
+                  >
+                    {isEs
+                      ? "Sugerencias IA: Crear apoyo estilo Napkin y práctica automática →"
+                      : "AI Suggestions: Create Napkin study support & auto practice →"}
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </section>
 

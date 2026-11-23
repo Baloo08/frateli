@@ -6,6 +6,7 @@ import { getLocale } from "@/i18n";
 import { query } from "@/lib/db";
 import { getSignedReadUrl } from "@/lib/storage";
 import { renderSafeMarkdown } from "@/lib/markdown";
+import type { VisualAidItem } from "@/lib/ai";
 import { AppShell } from "@/components/AppShell";
 import { StudentCourseClient } from "@/components/StudentCourseClient";
 
@@ -55,6 +56,9 @@ export default async function StudentCoursePage({
       title_en: string;
       content_md_es: string | null;
       content_md_en: string | null;
+      support_md_es: string | null;
+      support_md_en: string | null;
+      visual_aids_json: VisualAidItem[];
       content_locale: "es" | "en";
       video_asset_id: string | null;
       mp4_fallback_key: string | null;
@@ -63,7 +67,8 @@ export default async function StudentCoursePage({
       storage_driver: "local" | "s3" | null;
     }>(
       `SELECT l.id, l.module_id, l.lesson_type, l.title_es, l.title_en,
-              l.content_md_es, l.content_md_en, l.content_locale, l.video_asset_id,
+              l.content_md_es, l.content_md_en, l.support_md_es, l.support_md_en,
+              l.visual_aids_json, l.content_locale, l.video_asset_id,
               va.mp4_fallback_key, va.vtt_es_key, va.vtt_en_key, va.storage_driver
        FROM lessons l
        JOIN modules m ON m.id = l.module_id
@@ -72,9 +77,16 @@ export default async function StudentCoursePage({
        ORDER BY m.sort_order ASC, l.sort_order ASC`,
       [courseId]
     ),
-    query<{ id: string; title_es: string; title_en: string; passing_score_pct: string }>(
-      `SELECT id, title_es, title_en, passing_score_pct::text
-       FROM assessments WHERE course_id = $1 AND is_published = true ORDER BY created_at ASC`,
+    query<{
+      id: string;
+      lesson_id: string | null;
+      assessment_type: "graded" | "practice";
+      title_es: string;
+      title_en: string;
+      passing_score_pct: string;
+    }>(
+      `SELECT id, lesson_id, assessment_type, title_es, title_en, passing_score_pct::text
+       FROM assessments WHERE course_id = $1 AND is_published = true ORDER BY assessment_type DESC, created_at ASC`,
       [courseId]
     ),
     query<{ id: string; title: string; starts_at: Date; meet_link: string | null }>(
@@ -99,15 +111,32 @@ export default async function StudentCoursePage({
   let videoUrl: string | null = null;
   let vttUrl: string | null = null;
   let resources: { id: string; title: string; href: string; external: boolean }[] = [];
+  let resolvedVisualAids: (VisualAidItem & { imageUrl: string | null })[] = [];
 
   if (activeLesson) {
     if (activeLesson.mp4_fallback_key && activeLesson.storage_driver) {
       videoUrl = await getSignedReadUrl(activeLesson.mp4_fallback_key, activeLesson.storage_driver);
     }
-    const vttKey = locale === "en" ? activeLesson.vtt_en_key || activeLesson.vtt_es_key : activeLesson.vtt_es_key || activeLesson.vtt_en_key;
+    const vttKey =
+      locale === "en"
+        ? activeLesson.vtt_en_key || activeLesson.vtt_es_key
+        : activeLesson.vtt_es_key || activeLesson.vtt_en_key;
     if (vttKey && activeLesson.storage_driver) {
       vttUrl = await getSignedReadUrl(vttKey, activeLesson.storage_driver);
     }
+
+    const rawAids = Array.isArray(activeLesson.visual_aids_json)
+      ? activeLesson.visual_aids_json
+      : [];
+    resolvedVisualAids = await Promise.all(
+      rawAids.map(async (aid) => ({
+        ...aid,
+        imageUrl:
+          aid.imageKey && aid.storageDriver
+            ? await getSignedReadUrl(aid.imageKey, aid.storageDriver)
+            : null,
+      }))
+    );
 
     const resRows = await query<{
       id: string;
@@ -135,7 +164,6 @@ export default async function StudentCoursePage({
     );
   }
 
-  // Load questions for active assessments (without correct_answer_json!)
   const assessmentsWithQuestions = await Promise.all(
     assessmentsRes.rows.map(async (a) => {
       const qRes = await query<{
@@ -158,6 +186,15 @@ export default async function StudentCoursePage({
         (locale === "es" ? activeLesson.content_md_es : activeLesson.content_md_en) ||
           activeLesson.content_md_es ||
           activeLesson.content_md_en ||
+          ""
+      )
+    : "";
+
+  const activeSupportHtml = activeLesson
+    ? renderSafeMarkdown(
+        (locale === "es" ? activeLesson.support_md_es : activeLesson.support_md_en) ||
+          activeLesson.support_md_es ||
+          activeLesson.support_md_en ||
           ""
       )
     : "";
@@ -191,6 +228,8 @@ export default async function StudentCoursePage({
                   title: locale === "es" ? activeLesson.title_es : activeLesson.title_en,
                   contentLocale: activeLesson.content_locale,
                   htmlContent: activeHtml,
+                  supportHtml: activeSupportHtml,
+                  visualAids: resolvedVisualAids,
                   videoUrl,
                   vttUrl,
                   resources,

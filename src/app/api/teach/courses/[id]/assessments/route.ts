@@ -9,6 +9,8 @@ import { enqueueEmail } from "@/lib/email";
 const assessmentActionSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("create_assessment"),
+    assessmentType: z.enum(["graded", "practice"]).default("graded"),
+    lessonId: z.string().uuid().optional().nullable(),
     titleEs: z.string().trim().min(2),
     titleEn: z.string().trim().min(2),
     passingScorePct: z.coerce.number().min(1).max(100).default(70),
@@ -68,9 +70,20 @@ export async function POST(
   if (d.action === "create_assessment") {
     const assessmentId = await withTransaction(async (client) => {
       const aRes = await client.query<{ id: string }>(
-        `INSERT INTO assessments (course_id, title_es, title_en, passing_score_pct, time_limit_min, is_published)
-         VALUES ($1, $2, $3, $4, $5, true) RETURNING id`,
-        [courseId, d.titleEs, d.titleEn, d.passingScorePct, d.timeLimitMin ?? null]
+        `INSERT INTO assessments (
+           course_id, lesson_id, assessment_type, title_es, title_en, passing_score_pct,
+           max_attempts, time_limit_min, is_published
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true) RETURNING id`,
+        [
+          courseId,
+          d.lessonId ?? null,
+          d.assessmentType,
+          d.titleEs,
+          d.titleEn,
+          d.passingScorePct,
+          d.assessmentType === "practice" ? 99 : 3,
+          d.timeLimitMin ?? null,
+        ]
       );
       const id = aRes.rows[0].id;
 

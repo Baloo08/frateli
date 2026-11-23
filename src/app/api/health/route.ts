@@ -34,7 +34,7 @@ export async function GET() {
       postgres: dbOk ? "connected" : "unreachable",
       redis: redisOk ? "connected" : "unreachable",
       storageDriver: getActiveStorageDriver(),
-      aiConfigured: isAiConfigured(),
+      aiConfigured: await isAiConfigured(),
       googleOAuthConfigured: isGoogleOAuthConfigured(),
       timestamp: new Date().toISOString(),
     },

@@ -1,7 +1,9 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { Locale } from "@/i18n";
+import type { AiProviderStatus } from "@/lib/ai";
 
 interface DriveItem {
   id: string;
@@ -12,8 +14,7 @@ interface DriveItem {
 export function AdminResourcesClient({
   locale,
   storageDriver,
-  aiConfigured,
-  aiModel,
+  initialAiStatus,
   smtpConfigured,
   smtpUser,
   googleOAuthConfigured,
@@ -22,8 +23,7 @@ export function AdminResourcesClient({
 }: {
   locale: Locale;
   storageDriver: "local" | "s3";
-  aiConfigured: boolean;
-  aiModel: string;
+  initialAiStatus: AiProviderStatus;
   smtpConfigured: boolean;
   smtpUser: string | null;
   googleOAuthConfigured: boolean;
@@ -34,12 +34,97 @@ export function AdminResourcesClient({
   } | null;
   googleStatusParam: string | null;
 }) {
+  const router = useRouter();
   const isEs = locale === "es";
+
+  // BYOK Gemini state
+  const [aiStatus, setAiStatus] = useState<AiProviderStatus>(initialAiStatus);
+  const [geminiKey, setGeminiKey] = useState("");
+  const [showKey, setShowKey] = useState(false);
+  const [textModel, setTextModel] = useState(initialAiStatus.textModel || "gemini-3.8-flash");
+  const [imageModel, setImageModel] = useState(initialAiStatus.imageModel || "gemini-nano-banana-2.1");
+  const [aiFeedback, setAiFeedback] = useState<string | null>(null);
+
+  // SMTP & Drive state
   const [testEmail, setTestEmail] = useState("");
   const [smtpResult, setSmtpResult] = useState<string | null>(null);
   const [driveFiles, setDriveFiles] = useState<DriveItem[]>([]);
   const [driveMsg, setDriveMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  async function saveByokKey(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setAiFeedback(null);
+    try {
+      const res = await fetch("/api/admin/ai-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "save",
+          apiKey: geminiKey || undefined,
+          textModel,
+          imageModel,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAiFeedback(`Error: ${data.error}`);
+        return;
+      }
+      setAiStatus(data.status);
+      setGeminiKey("");
+      setAiFeedback(
+        isEs
+          ? "Clave Gemini BYOK cifrada y guardada correctamente en PostgreSQL."
+          : "BYOK Gemini key encrypted and saved in PostgreSQL."
+      );
+      router.refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function testByokKey() {
+    setBusy(true);
+    setAiFeedback(null);
+    try {
+      const res = await fetch("/api/admin/ai-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "test",
+          apiKey: geminiKey || undefined,
+          textModel,
+          imageModel,
+        }),
+      });
+      const data = await res.json();
+      setAiFeedback(
+        data.ok
+          ? `Conexión Gemini OK (${data.model}: ${data.reply})`
+          : `Error Gemini: ${data.error}`
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeByokKey() {
+    setBusy(true);
+    setAiFeedback(null);
+    try {
+      const res = await fetch("/api/admin/ai-settings", { method: "DELETE" });
+      const data = await res.json();
+      if (res.ok) {
+        setAiStatus(data.status);
+        setAiFeedback(isEs ? "Clave BYOK eliminada." : "BYOK key removed.");
+        router.refresh();
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function sendSmtpTest(e: React.FormEvent) {
     e.preventDefault();
@@ -80,11 +165,7 @@ export function AdminResourcesClient({
         body: JSON.stringify({ action: "set_root_folder", folderId, folderName }),
       });
       if (res.ok) {
-        setDriveMsg(
-          isEs
-            ? `Carpeta raíz fijada: ${folderName}`
-            : `Root folder saved: ${folderName}`
-        );
+        setDriveMsg(isEs ? `Carpeta raíz fijada: ${folderName}` : `Root folder saved: ${folderName}`);
       }
     } finally {
       setBusy(false);
@@ -94,7 +175,7 @@ export function AdminResourcesClient({
   return (
     <div className="stack">
       <section className="card">
-        <h1>{isEs ? "Recursos, Google Workspace / Drive, IA y SMTP" : "Resources, Google Workspace / Drive, AI & SMTP"}</h1>
+        <h1>{isEs ? "Recursos, IA BYOK (Gemini), Google Workspace y SMTP" : "Resources, BYOK AI (Gemini), Google Workspace & SMTP"}</h1>
         {googleStatusParam === "connected" && (
           <div className="alert alert-success">
             {isEs ? "Cuenta de Google conectada correctamente." : "Google account connected successfully."}
@@ -103,10 +184,85 @@ export function AdminResourcesClient({
         {googleStatusParam === "missing_env" && (
           <div className="alert alert-error" role="alert">
             {isEs
-              ? "Faltan GOOGLE_OAUTH_CLIENT_ID y GOOGLE_OAUTH_CLIENT_SECRET en las variables de entorno de EasyPanel."
-              : "Missing GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET in EasyPanel environment variables."}
+              ? "Faltan GOOGLE_OAUTH_CLIENT_ID y GOOGLE_OAUTH_CLIENT_SECRET en EasyPanel."
+              : "Missing GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET in EasyPanel."}
           </div>
         )}
+      </section>
+
+      {/* BYOK Gemini API Card */}
+      <section className="card stack">
+        <div className="row" style={{ justifyContent: "space-between" }}>
+          <h2 style={{ margin: 0 }}>{isEs ? "Gemini API — Configuración BYOK (Superadmin)" : "Gemini API — BYOK Configuration (Superadmin)"}</h2>
+          <span className={`badge ${aiStatus.configured ? "badge-success" : "badge-warning"}`}>
+            {aiStatus.configured
+              ? `${aiStatus.source.toUpperCase()} (${aiStatus.keyHint})`
+              : isEs
+              ? "Sin clave configurada"
+              : "Not configured"}
+          </span>
+        </div>
+        <p style={{ color: "var(--text-secondary)", margin: 0 }}>
+          {isEs
+            ? "Ingresa tu propia API Key de Google AI Studio (Gemini). Se cifra con AES-256-GCM en PostgreSQL y habilita la generación de textos de apoyo estilo Napkin, diagramas e ítems de práctica para los docentes."
+            : "Enter your own Google AI Studio (Gemini) API Key. It is encrypted with AES-256-GCM in PostgreSQL and powers Napkin-style study guides, diagrams, and practice items for teachers."}
+        </p>
+
+        <form onSubmit={saveByokKey} className="grid-3">
+          <div className="field">
+            <label htmlFor="byok-key">{isEs ? "Gemini API Key (BYOK)" : "Gemini API Key (BYOK)"}</label>
+            <div className="row" style={{ alignItems: "stretch" }}>
+              <input
+                id="byok-key"
+                type={showKey ? "text" : "password"}
+                autoComplete="off"
+                placeholder={aiStatus.keyHint ? `${aiStatus.keyHint} (dejar vacío para mantener)` : "AIza..."}
+                value={geminiKey}
+                onChange={(e) => setGeminiKey(e.target.value)}
+                style={{ flex: 1 }}
+              />
+              <button type="button" className="btn" aria-pressed={showKey} onClick={() => setShowKey((s) => !s)}>
+                {showKey ? (isEs ? "Ocultar" : "Hide") : isEs ? "Ver" : "Show"}
+              </button>
+            </div>
+          </div>
+
+          <div className="field">
+            <label htmlFor="byok-text">{isEs ? "Modelo de Texto / Video" : "Text / Video Model"}</label>
+            <select id="byok-text" value={textModel} onChange={(e) => setTextModel(e.target.value)}>
+              <option value="gemini-3.8-flash">gemini-3.8-flash (Recomendado)</option>
+              <option value="gemini-4-argon">gemini-4-argon (Máxima calidad)</option>
+              <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (Ultra rápido)</option>
+            </select>
+          </div>
+
+          <div className="field">
+            <label htmlFor="byok-img">{isEs ? "Modelo de Imágenes (Estilo Napkin)" : "Image Model (Napkin Style)"}</label>
+            <select id="byok-img" value={imageModel} onChange={(e) => setImageModel(e.target.value)}>
+              <option value="gemini-nano-banana-2.1">gemini-nano-banana-2.1 (Recomendado)</option>
+              <option value="gemini-3-pro-image">gemini-3-pro-image (Alta fidelidad)</option>
+              <option value="gemini-3.1-flash-lite-image">gemini-3.1-flash-lite-image (Rápido)</option>
+            </select>
+          </div>
+
+          <div className="row" style={{ gridColumn: "1 / -1" }}>
+            <button type="submit" className="btn btn-primary" disabled={busy}>
+              {isEs ? "Guardar clave BYOK" : "Save BYOK Key"}
+            </button>
+            <button type="button" className="btn" disabled={busy} onClick={testByokKey}>
+              {isEs ? "Probar conexión Gemini" : "Test Gemini Connection"}
+            </button>
+            {aiStatus.source === "byok" && (
+              <button type="button" className="btn btn-danger" disabled={busy} onClick={removeByokKey}>
+                {isEs ? "Eliminar clave BYOK" : "Remove BYOK Key"}
+              </button>
+            )}
+          </div>
+        </form>
+
+        <div aria-live="polite">
+          {aiFeedback && <div className="alert">{aiFeedback}</div>}
+        </div>
       </section>
 
       <section className="grid-2">
@@ -170,13 +326,7 @@ export function AdminResourcesClient({
         </div>
 
         <div className="card stack">
-          <h2>{isEs ? "Estado del Motor de IA y Almacenamiento" : "AI Engine & Storage Status"}</h2>
-          <p>
-            <strong>Gemini IA:</strong>{" "}
-            <span className={`badge ${aiConfigured ? "badge-success" : "badge-warning"}`}>
-              {aiConfigured ? `${aiModel} (Activo)` : "Falta GEMINI_API_KEY"}
-            </span>
-          </p>
+          <h2>{isEs ? "Almacenamiento y Correo Google SMTP" : "Storage & Google SMTP Email"}</h2>
           <p>
             <strong>{isEs ? "Driver de almacenamiento:" : "Storage driver:"}</strong>{" "}
             <span className="badge badge-success">{storageDriver.toUpperCase()}</span>
