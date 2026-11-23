@@ -1,0 +1,71 @@
+{
+  "brand": "Frateli Virtual Campus",
+  "skipToMain": "Skip to main content",
+  "nav": {
+    "catalog": "Catalog",
+    "admin": "Superadmin",
+    "teach": "Teacher",
+    "learn": "Student",
+    "studio": "Video Studio",
+    "preferences": "Preferences",
+    "logout": "Sign out",
+    "login": "Sign in"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "create": "Create",
+    "delete": "Delete",
+    "edit": "Edit",
+    "publish": "Publish",
+    "loading": "Loading...",
+    "language": "Language",
+    "spanish": "Spanish",
+    "english": "English",
+    "aiAssist": "AI Assistant (Gemini)",
+    "googleTools": "Google Tools",
+    "back": "Back"
+  },
+  "auth": {
+    "title": "Sign in to Frateli LMS",
+    "subtitle": "Sign in to access your assigned portal.",
+    "email": "Email address",
+    "password": "Password",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "submit": "Enter Campus",
+    "invalidCredentials": "Invalid email or password."
+  },
+  "admin": {
+    "title": "Superadmin Portal",
+    "teachers": "Teachers",
+    "courses": "Courses",
+    "studioAccess": "Video Studio Access Control",
+    "resources": "Resources, Google & AI",
+    "audit": "Immutable Audit Log"
+  },
+  "teach": {
+    "title": "Teacher Portal",
+    "myCourses": "My Courses",
+    "curriculum": "Curriculum & Content",
+    "assessments": "Assessments & Grading",
+    "interactions": "Q&A and Messages",
+    "requestStudio": "Request Video Studio Access",
+    "openStudio": "Open Video Studio"
+  },
+  "learn": {
+    "title": "Student Portal",
+    "myLearning": "My Learning",
+    "grades": "My Grades",
+    "certificates": "My Certificates",
+    "markComplete": "Mark lesson complete",
+    "downloadCert": "Download PDF Certificate"
+  },
+  "studio": {
+    "title": "Content Editing Portal (Video Studio)",
+    "record": "Record camera / screen",
+    "teleprompter": "Teleprompter (AI)",
+    "timeline": "Timeline trim & captions",
+    "publishToCourse": "Publish to lesson"
+  }
+}

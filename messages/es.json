@@ -1,0 +1,71 @@
+{
+  "brand": "Frateli Campus Virtual",
+  "skipToMain": "Saltar al contenido principal",
+  "nav": {
+    "catalog": "Catálogo",
+    "admin": "Superadmin",
+    "teach": "Docente",
+    "learn": "Estudiante",
+    "studio": "Video Studio",
+    "preferences": "Preferencias",
+    "logout": "Cerrar sesión",
+    "login": "Iniciar sesión"
+  },
+  "common": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "create": "Crear",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "publish": "Publicar",
+    "loading": "Cargando...",
+    "language": "Idioma",
+    "spanish": "Español",
+    "english": "Inglés",
+    "aiAssist": "Asistente IA (Gemini)",
+    "googleTools": "Herramientas Google",
+    "back": "Volver"
+  },
+  "auth": {
+    "title": "Acceso a Frateli LMS",
+    "subtitle": "Inicia sesión para entrar a tu portal asignado.",
+    "email": "Correo electrónico",
+    "password": "Contraseña",
+    "showPassword": "Mostrar contraseña",
+    "hidePassword": "Ocultar contraseña",
+    "submit": "Entrar al Campus",
+    "invalidCredentials": "Correo o contraseña inválidos."
+  },
+  "admin": {
+    "title": "Portal Superadministrativo",
+    "teachers": "Docentes",
+    "courses": "Cursos",
+    "studioAccess": "Control de Video Studio",
+    "resources": "Recursos, Google e IA",
+    "audit": "Auditoría Inmutable"
+  },
+  "teach": {
+    "title": "Perfil de Docente",
+    "myCourses": "Mis Cursos",
+    "curriculum": "Currículo y Contenidos",
+    "assessments": "Evaluaciones y Notas",
+    "interactions": "Foro y Mensajes",
+    "requestStudio": "Solicitar acceso a Video Studio",
+    "openStudio": "Abrir Video Studio"
+  },
+  "learn": {
+    "title": "Portal Estudiante",
+    "myLearning": "Mi Aprendizaje",
+    "grades": "Mis Notas",
+    "certificates": "Mis Certificados",
+    "markComplete": "Marcar lección completada",
+    "downloadCert": "Descargar certificado PDF"
+  },
+  "studio": {
+    "title": "Portal de Edición de Contenido (Video Studio)",
+    "record": "Grabar cámara / pantalla",
+    "teleprompter": "Teleprompter (IA)",
+    "timeline": "Edición temporal y subtítulos",
+    "publishToCourse": "Publicar en lección"
+  }
+}
